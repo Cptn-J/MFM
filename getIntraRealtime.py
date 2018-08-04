@@ -12,7 +12,7 @@ import requests
 
 def getIntraData(ticker, results):
     try:
-        # First find finviz webpage for specific stock ticker
+        # First find google search page for specific stock ticker
         url = ("https://www.google.com/search?q=%24" + ticker.upper() + "+stock+price")
         page = requests.get(url).content
         # Then create a 'soup' for the webpage
