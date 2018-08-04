@@ -1,0 +1,7 @@
+1) Install PRAW
+	pip install praw
+2) Install Pandas
+	pip install pandas
+3) Install BeautifulSoup
+4) Install LXML
+	pip install lxml
