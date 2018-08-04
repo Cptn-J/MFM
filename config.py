@@ -9,7 +9,7 @@
 #
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
 
-username 	 = ""
-password 	 = ""
+username 	   = ""
+password 	   = ""
 clientId     = ""
 clientSecret = ""
