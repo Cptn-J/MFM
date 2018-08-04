@@ -61,8 +61,6 @@ if __name__ == '__main__':
 
     # First login to reddit as "bot"
     redditAccess = rhBot.botLogin()
-    subreddits = ['stocks', 'RobinHood', 'wallstreetbets']
-    waitTime = 1 # In minutes
 
     # now threading1 runs regardless of user input
     subThread = Thread(target=main, args =[redditAccess, subreddit, waitTime])
