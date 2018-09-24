@@ -70,10 +70,18 @@ import stockChecker as sc
 def botLogin():
     reddit = praw.Reddit(client_id     = config.clientId     ,
                          client_secret = config.clientSecret ,
-                         user_agent    = "/u/USER MEME Portfolio maker v1.0" )
+                         user_agent    = "/u/_Phil_Connors MEME Portfolio maker v1.0" )
     return reddit
 
-def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None, searchTimeEnd = None, filePath = None, postLim = 100):
+def runBot(redditLogin, 
+           subredditName, 
+           datalogFile = 'DataLog.csv', 
+           searchDate = None, 
+           searchTimeStart = None,
+           searchTimeEnd = None,
+           filePath = None, 
+           postLim = 100, 
+           intraday = False):
     """
     # --*-- # # --*-- # # --*-- # Introduction # --*-- # # --*-- # # --*-- #
     First Validate any optional inputs. Check searchDate, searchTimeStart, and searchTimeEnd input 
@@ -88,18 +96,14 @@ def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None
     searchDate = validateDateText(searchDate)
     if searchDate is None:
         searchDate = datetime.datetime.today()
-        
-    # Create date format for "StockHits.csv".
-    #*UPDATE*#  This should changed so that everything uses same date format
-    dayMonYr = searchDate.strftime('%d-%m-%y')
     
-    searchTimeStart = validateTimeText(searchTimeStart, dayMonYr)
+    searchTimeStart = validateTimeText(searchTimeStart, searchDate.strftime('%m-%d-%y'))
     if searchTimeStart is None:
-        searchTimeStart = datetime.datetime.strptime(dayMonYr + ' 00:00:01', '%d-%m-%y %H:%M:%S')
+        searchTimeStart = datetime.datetime.strptime(searchDate.strftime('%m-%d-%y') + ' 00:00:01', '%m-%d-%y %H:%M:%S')
     
-    searchTimeEnd = validateTimeText(searchTimeEnd, dayMonYr)    
+    searchTimeEnd = validateTimeText(searchTimeEnd, searchDate.strftime('%m-%d-%y'))    
     if searchTimeEnd is None or searchTimeEnd < searchTimeStart:
-        searchTimeEnd = datetime.datetime.strptime(dayMonYr + ' 23:59:59', '%d-%m-%y %H:%M:%S')
+        searchTimeEnd = datetime.datetime.strptime(searchDate.strftime('%m-%d-%y') + ' 23:59:59', '%m-%d-%y %H:%M:%S')
 
     if filePath is None:
         filePath = getFilePath.getPath()
@@ -146,7 +150,7 @@ def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None
             continue
         elif searchDate.day == submissionDate.day:
             if dailyId == 0:
-                #print("\nCollecting data for DataLog...")
+                print("\nCollecting data for DataLog...")
                 foundPost = True
             dailyId = submission.id
             oldDateCount = 0
@@ -186,7 +190,7 @@ def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None
                     stockData['Comment'].append(commentTitleBody.replace(";", "."))
                     stockData['Sub'].append(subredditName)
                     stockData['Time'].append(submissionTime.strftime('%H:%M:%S'))
-                    stockData['Date'].append(dayMonYr)
+                    stockData['Date'].append(searchDate.strftime('%m-%d-%y'))
             else:
                 # Can't find tickers the easy way with a "$" indication, so have to do it the hard way
                 # First remove any punctuation such as commas or periods
@@ -217,7 +221,7 @@ def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None
                         stockData['Comment'].append(commentTitleBody.replace(";", "."))
                         stockData['Sub'].append(subredditName)
                         stockData['Time'].append(submissionTime.strftime('%H:%M:%S'))
-                        stockData['Date'].append(dayMonYr)
+                        stockData['Date'].append(searchDate.strftime('%m-%d-%y'))
          
         # Now check for comments made in the current submission between searchTimeStart and searchTimeEnd
         # Access submission to parse comments
@@ -258,7 +262,7 @@ def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None
                         stockData['Comment'].append(comment.body.replace(";", "."))
                         stockData['Sub'].append(subredditName)
                         stockData['Time'].append(commentTime.strftime('%H:%M:%S'))
-                        stockData['Date'].append(dayMonYr)
+                        stockData['Date'].append(searchDate.strftime('%m-%d-%y'))
                 else:
                     # Can't find tickers the easy way with a "$" indication, so have to do it the hard way
                     # First remove any punctuation such as commas or periods
@@ -289,7 +293,7 @@ def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None
                             stockData['Comment'].append(comment.body.replace(";", "."))
                             stockData['Sub'].append(subredditName)
                             stockData['Time'].append(commentTime.strftime('%H:%M:%S'))
-                            stockData['Date'].append(dayMonYr)
+                            stockData['Date'].append(searchDate.strftime('%m-%d-%y'))
             else:
                 #Comment was not made during current searchTime frame
                 continue
@@ -317,29 +321,31 @@ def runBot(redditLogin, subredditName, searchDate = None, searchTimeStart = None
     # Now remove any ticker from the dataframe that is a known bad ticker
     dataLogDF = dataLogDF[dataLogDF.Stock.isin(goodStocks)].reset_index(drop=True)
     
-    # Create empty results dict for all threads of "getIntraData" to use
-    results = {stock:0 for stock in goodStocks}
-    # Creat empty threads list
-    threads = []
-    
-    for ii in range(len(goodStocks)):
-        process = Thread(target = getIntraData, args =[goodStocks[ii], results])
-        process.start()
-        threads.append(process)
+    if intraday is True:
+        print('Fetching intraday data!')
+        # Create empty results dict for all threads of "getIntraData" to use
+        results = {stock:0 for stock in goodStocks}
+        # Creat empty threads list
+        threads = []
+        
+        for ii in range(len(goodStocks)):
+            process = Thread(target = getIntraData, args =[goodStocks[ii], results])
+            process.start()
+            threads.append(process)
 
-    for process in threads:
-        process.join()
+        for process in threads:
+            process.join()
+        
+        for stock in goodStocks:
+            idx = dataLogDF[dataLogDF['Stock'] == stock].index
+            if len(idx) == 1:
+                dataLogDF.at[idx, 'Price'] = results[stock]
+            else:
+                for index in idx:
+                    dataLogDF.at[index, 'Price'] = results[stock]
     
-    for stock in goodStocks:
-        idx = dataLogDF[dataLogDF['Stock'] == stock].index
-        if len(idx) == 1:
-            dataLogDF.at[idx, 'Price'] = results[stock]
-        else:
-            for index in idx:
-                dataLogDF.at[index, 'Price'] = results[stock]
-    
-    dataLogDF.to_csv(os.path.join(filePath, 'DataLog.csv'), mode = 'a', header = False, index = False)
-    print("Datalog updated with Daily Stock Discussion Information.")
+    dataLogDF.to_csv(os.path.join(filePath, datalogFile), mode = 'a', header = False, index = False)
+    print(subredditName, "Datalog file updated with Daily Stock Discussion Information.")
 
 def findTickerSymbols(wordList):
     tickerList = []
@@ -370,7 +376,7 @@ def findTickerSymbols(wordList):
     
 def validateTimeText(timeText, dateText):
     try:
-        dtFormat = datetime.datetime.strptime(' '.join([dateText,timeText]), '%d-%m-%y %H:%M:%S')
+        dtFormat = datetime.datetime.strptime(' '.join([dateText,timeText]), '%m-%d-%y %H:%M:%S')
         return dtFormat
     except:
         return None
